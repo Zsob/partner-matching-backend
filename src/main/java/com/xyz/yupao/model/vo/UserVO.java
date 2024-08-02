@@ -1,22 +1,21 @@
-package com.xyz.yupao.model.domain;
+package com.xyz.yupao.model.vo;
 
-import com.baomidou.mybatisplus.annotation.*;
+
 import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
 
 /**
- * 用户表
- * @TableName user
+ * 用户包装类(脱敏)
  */
-@TableName(value ="user")
 @Data
-public class User implements Serializable {
+public class UserVO implements Serializable {
+
+    private static final long serialVersionUID = -149323950570031411L;
     /**
      * 用户ID
      */
-    @TableId(type = IdType.AUTO)
     private long id;
 
     /**
@@ -85,16 +84,7 @@ public class User implements Serializable {
     private Date updateTime;
 
     /**
-     * 是否删除
-     */
-    @TableLogic
-    private Integer isDelete;
-
-    /**
      * 用户角色 0-普通用户 1-管理员
      */
     private Integer userRole;
-
-    @TableField(exist = false)
-    private static final long serialVersionUID = 1L;
 }

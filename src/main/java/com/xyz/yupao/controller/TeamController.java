@@ -10,6 +10,7 @@ import com.xyz.yupao.model.domain.Team;
 import com.xyz.yupao.model.domain.User;
 import com.xyz.yupao.model.dto.TeamQuery;
 import com.xyz.yupao.model.request.TeamAddRequest;
+import com.xyz.yupao.model.vo.TeamUserVO;
 import com.xyz.yupao.service.TeamService;
 import com.xyz.yupao.service.UserService;
 import org.springframework.beans.BeanUtils;
@@ -30,8 +31,8 @@ public class TeamController {
 
     /**
      * 添加队伍接口
-     *
-     * @param team
+     * @param teamAddRequest
+     * @param request
      * @return
      */
     @PostMapping("/add")
@@ -110,16 +111,14 @@ public class TeamController {
      * @return
      */
     @GetMapping("/list")
-    public BaseResponse<List<Team>> listTeams(TeamQuery teamQuery){
+    public BaseResponse<List<TeamUserVO>> listTeams(TeamQuery teamQuery,HttpServletRequest request){
         if (teamQuery==null){
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        // 构造查询条件
-        Team team = new Team();
-        BeanUtils.copyProperties(teamQuery,team);
-        QueryWrapper<Team> queryWrapper = new QueryWrapper<>(team);
+        // 判断是否为管理员
+        boolean isAdmin = userService.isAdmin(request);
         // 执行查询操作
-        List<Team> teamList = teamService.list(queryWrapper);
+        List<TeamUserVO> teamList = teamService.listTeams(teamQuery, isAdmin);
         return ResultUtils.success(teamList);
     }
 
