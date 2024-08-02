@@ -27,7 +27,7 @@ public class PreCacheJob {
     private RedisTemplate<String,Object> redisTemplate;
 
     //重点用户
-    private List<Long> mainUserList= Arrays.asList(1L,2L,3L);
+    private List<Long> mainUserList= Arrays.asList(0L,1L,2L,3L);
 
     //每天执行，预热推荐用户 秒-分-时-日-月-年
     @Scheduled(cron = "0 23 2 * * *")

@@ -164,6 +164,13 @@ public class UserController {
         return ResultUtils.success(result);
     }
 
+    /**
+     * 首页推荐用户接口
+     * @param pageNum
+     * @param pageSize
+     * @param request
+     * @return
+     */
     @GetMapping("/recommend")
     public BaseResponse<Page<User>> recommendUsers(long pageNum,long pageSize,HttpServletRequest request){
         Page<User> userList=userService.getRecommendUsers(pageNum,pageSize,request);

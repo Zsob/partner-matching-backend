@@ -233,10 +233,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Override
     public Page<User> getRecommendUsers(long pageNum, long pageSize, HttpServletRequest request) {
-        // 获取当前登录用户
-        User loginUser = this.getLoginUser(request);
-        // 格式化Redis的key，以用户ID作为唯一标识
-        String redisKey=String.format("yupao:user:recommend:%s",loginUser.getId());
+        String redisKey= null;
+        try {
+            // 获取当前登录用户
+            User loginUser = this.getLoginUser(request);
+            // 格式化Redis的key，以用户ID作为唯一标识
+            redisKey = String.format("yupao:user:recommend:%s",loginUser.getId());
+        } catch (Exception e) {
+            // 当前用户未登录
+            redisKey = "yupao:user:recommend:0";
+        }
         // 尝试从Redis中获取缓存的用户分页数据
         ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
         Page<User> userPage = (Page<User>) valueOperations.get(redisKey);
