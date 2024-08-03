@@ -22,6 +22,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
@@ -228,6 +229,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         return this.updateById(team);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public boolean joinTeam(TeamJoinRequest teamJoinRequest, User loginUser) {
         // 确认请求完整性
