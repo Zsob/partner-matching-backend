@@ -9,6 +9,8 @@ import com.xyz.yupao.model.domain.User;
 import com.xyz.yupao.model.domain.UserTeam;
 import com.xyz.yupao.model.dto.TeamQuery;
 import com.xyz.yupao.model.enums.TeamStatusEnum;
+import com.xyz.yupao.model.request.TeamAddRequest;
+import com.xyz.yupao.model.request.TeamUpdateRequest;
 import com.xyz.yupao.model.vo.TeamUserVO;
 import com.xyz.yupao.model.vo.UserVO;
 import com.xyz.yupao.service.TeamService;
@@ -188,6 +190,41 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
             teamUserVOList.add(teamUserVO);
         }
         return teamUserVOList;
+    }
+
+    @Override
+    public boolean updateTeam(TeamUpdateRequest teamUpdateRequest, User loginUser) {
+        // 检查队伍对象是否为空
+        if (teamUpdateRequest==null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        // 获取修改队伍的id并验证
+        Long id = teamUpdateRequest.getId();
+        if (id==null || id<=0){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"队伍不存在");
+        }
+        // 获取旧的队伍信息
+        Team oldTeam = this.getById(id);
+        if (oldTeam==null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"更新队伍不存在");
+        }
+        // 只有管理员或队伍的创建人可以修改信息
+        if (oldTeam.getUserId()!= loginUser.getId() && !userService.isAdmin(loginUser)){
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+        // 如果队伍状态为加密且原来不是加密状态，检验是否设置了密码
+        TeamStatusEnum newStatusEnum = TeamStatusEnum.getEnumByValue(teamUpdateRequest.getStatus());
+        TeamStatusEnum oldStatusEnum = TeamStatusEnum.getEnumByValue(oldTeam.getStatus());
+        if (TeamStatusEnum.SECRET.equals(newStatusEnum) && !TeamStatusEnum.SECRET.equals(oldStatusEnum)){
+            if (StringUtils.isBlank(teamUpdateRequest.getPassword())){
+                throw new BusinessException(ErrorCode.PARAMS_ERROR,"加密队伍必须设置密码");
+            }
+        }
+        // 创建新的队伍对象，并复制属性，进行更新
+        Team team = new Team();
+        BeanUtils.copyProperties(teamUpdateRequest,team);
+        // 执行更新操作，返回更新的结果
+        return this.updateById(team);
     }
 }
 
