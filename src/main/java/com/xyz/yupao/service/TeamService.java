@@ -5,13 +5,13 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.xyz.yupao.model.domain.User;
 import com.xyz.yupao.model.dto.TeamQuery;
 import com.xyz.yupao.model.request.TeamAddRequest;
+import com.xyz.yupao.model.request.TeamJoinRequest;
 import com.xyz.yupao.model.request.TeamUpdateRequest;
 import com.xyz.yupao.model.vo.TeamUserVO;
 
 import java.util.List;
 
 /**
-* @author 74703
 * @description 针对表【team(队伍)】的数据库操作Service
 * @createDate 2024-08-01 14:49:59
 */
@@ -40,4 +40,12 @@ public interface TeamService extends IService<Team> {
      * @return
      */
     boolean updateTeam(TeamUpdateRequest teamUpdateRequest, User loginUser);
+
+    /**
+     * 加入队伍
+     * @param teamJoinRequest
+     * @param loginUser
+     * @return
+     */
+    boolean joinTeam(TeamJoinRequest teamJoinRequest, User loginUser);
 }

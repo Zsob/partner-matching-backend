@@ -10,6 +10,7 @@ import com.xyz.yupao.model.domain.Team;
 import com.xyz.yupao.model.domain.User;
 import com.xyz.yupao.model.dto.TeamQuery;
 import com.xyz.yupao.model.request.TeamAddRequest;
+import com.xyz.yupao.model.request.TeamJoinRequest;
 import com.xyz.yupao.model.request.TeamUpdateRequest;
 import com.xyz.yupao.model.vo.TeamUserVO;
 import com.xyz.yupao.service.TeamService;
@@ -139,4 +140,22 @@ public class TeamController {
         return ResultUtils.success(resultPage);
     }
 
+    @PostMapping("/join")
+    public BaseResponse<Boolean> joinTeam(@RequestBody TeamJoinRequest teamJoinRequest,HttpServletRequest request){
+        // 参数校验
+        if (teamJoinRequest==null) {
+            throw new BusinessException(ErrorCode.NULL_ERROR,"加入队伍数据为空");
+        }
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        if (loginUser==null){
+            throw new BusinessException(ErrorCode.NOT_LOGIN);
+        }
+        // 调用服务层付费处理加入队伍的请求
+        boolean result=teamService.joinTeam(teamJoinRequest,loginUser);
+        if (!result){
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR,"加入队伍失败");
+        }
+        return ResultUtils.success(true);
+    }
 }

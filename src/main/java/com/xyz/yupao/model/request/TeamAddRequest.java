@@ -1,12 +1,14 @@
 package com.xyz.yupao.model.request;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
+
 import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
 
+/**
+ * 添加队伍请求对象
+ */
 @Data
 public class TeamAddRequest implements Serializable {
 
