@@ -54,20 +54,24 @@ public class TeamController {
     }
 
     /**
-     * 删除队伍接口
+     * 解散队伍接口
      *
      * @param id
      * @return
      */
     @PostMapping("/delete")
-    public BaseResponse<Boolean> deleteTeam(@RequestBody long id) {
+    public BaseResponse<Boolean> deleteTeam(@RequestBody long id,HttpServletRequest request) {
         if (id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        boolean result = teamService.removeById(id);
+        // 获取当前用户信息
+        User loginUser = userService.getLoginUser(request);
+        // 执行删除/解散操作
+        boolean result = teamService.deleteTeam(id,loginUser);
         if (!result) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "删除失败");
         }
+        // 返回操作结果
         return ResultUtils.success(true);
     }
 
