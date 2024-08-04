@@ -11,6 +11,7 @@ import com.xyz.yupao.model.dto.TeamQuery;
 import com.xyz.yupao.model.enums.TeamStatusEnum;
 import com.xyz.yupao.model.request.TeamAddRequest;
 import com.xyz.yupao.model.request.TeamJoinRequest;
+import com.xyz.yupao.model.request.TeamQuitRequest;
 import com.xyz.yupao.model.request.TeamUpdateRequest;
 import com.xyz.yupao.model.vo.TeamUserVO;
 import com.xyz.yupao.model.vo.UserVO;
@@ -279,9 +280,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
             throw new BusinessException(ErrorCode.PARAMS_ERROR,"用户已加入该队伍");
         }
         // 检查队伍是否满员
-        queryWrapper=new QueryWrapper<>();
-        queryWrapper.eq("teamId", teamId);
-        long teamHasJoinNum = userTeamService.count(queryWrapper);
+        long teamHasJoinNum = countTeamUserByTeamId(teamId);
         if (teamHasJoinNum>=team.getMaxNum()){
             throw new BusinessException(ErrorCode.PARAMS_ERROR,"队伍已满");
         }
@@ -291,6 +290,79 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         userTeam.setTeamId(teamId);
         userTeam.setJoinTime(new Date());
         return userTeamService.save(userTeam);
+    }
+
+    private long countTeamUserByTeamId(Long teamId) {
+        QueryWrapper<UserTeam> queryWrapper;
+        queryWrapper=new QueryWrapper<>();
+        queryWrapper.eq("teamId", teamId);
+        long teamHasJoinNum = userTeamService.count(queryWrapper);
+        return teamHasJoinNum;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public boolean quitTeam(TeamQuitRequest teamQuitRequest, User loginUser) {
+        // 检验请求对象是否为空
+        if (teamQuitRequest==null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        // 校验队伍ID有效性
+        Long teamId = teamQuitRequest.getTeamId();
+        if (teamId==null || teamId<=0){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        // 校验队伍是否存在
+        Team team = this.getById(teamId);
+        if (team==null){
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        }
+        // 校验当前用户是否已加入队伍
+        long userId = loginUser.getId();
+        UserTeam queryUserTeam = new UserTeam();
+        queryUserTeam.setUserId(userId);
+        queryUserTeam.setTeamId(teamId);
+        QueryWrapper<UserTeam> queryWrapper = new QueryWrapper<>(queryUserTeam);
+        long count = userTeamService.count(queryWrapper);
+        if (count==0){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"未加入队伍");
+        }
+        // 获取当前队伍成员数
+        long teamHasJoinNum = this.countTeamUserByTeamId(teamId);
+        if (teamHasJoinNum==1) {
+            // 如果队伍只剩一人，队伍解散
+            this.removeById(teamId);
+        } else {
+            // 如果队伍有多于1人
+            if (team.getUserId()==userId) {
+                // 如果是队长退出队伍，转移队长职位 - 先来后到
+                QueryWrapper<UserTeam> userTeamQueryWrapper = new QueryWrapper<>();
+                userTeamQueryWrapper.eq("teamId",teamId);
+                userTeamQueryWrapper.last("order by id asc limit 2");
+                List<UserTeam> userTeamList = userTeamService.list(userTeamQueryWrapper);
+                // 确保有足够的用户列表进行队长职位转移
+                if (CollectionUtils.isEmpty(userTeamList) && userTeamList.size()<=1){
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+                }
+                // 获取新的队长用户
+                UserTeam nextUserTeam = userTeamList.get(1);
+                Long nextTeamLeaderId = nextUserTeam.getUserId();
+                // 更新队伍信息，设置新队长
+                Team updateTeam = new Team();
+                updateTeam.setId(teamId);
+                updateTeam.setUserId(nextTeamLeaderId);
+                boolean result = this.updateById(updateTeam);
+                if (!result){
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR,"更新队长失败");
+                }
+            }
+        }
+        // 移除用户和队伍的关系
+        boolean result = userTeamService.remove(queryWrapper);
+        if (!result){
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR,"退出队伍失败");
+        }
+        return true;
     }
 }
 

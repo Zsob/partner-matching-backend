@@ -11,6 +11,7 @@ import com.xyz.yupao.model.domain.User;
 import com.xyz.yupao.model.dto.TeamQuery;
 import com.xyz.yupao.model.request.TeamAddRequest;
 import com.xyz.yupao.model.request.TeamJoinRequest;
+import com.xyz.yupao.model.request.TeamQuitRequest;
 import com.xyz.yupao.model.request.TeamUpdateRequest;
 import com.xyz.yupao.model.vo.TeamUserVO;
 import com.xyz.yupao.service.TeamService;
@@ -157,5 +158,24 @@ public class TeamController {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR,"加入队伍失败");
         }
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 退出队伍
+     * @param teamQuitRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/quit")
+    public BaseResponse<Boolean> quitTeam(@RequestBody TeamQuitRequest teamQuitRequest, HttpServletRequest request) {
+        // 检验请求参数是否为空
+        if (teamQuitRequest == null) {
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        }
+        // 获取当前用户信息
+        User loginUser = userService.getLoginUser(request);
+        // 调用业务层执行退出队伍操作
+        boolean result = teamService.quitTeam(teamQuitRequest, loginUser);
+        return ResultUtils.success(result);
     }
 }

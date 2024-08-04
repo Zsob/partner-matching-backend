@@ -6,6 +6,7 @@ import com.xyz.yupao.model.domain.User;
 import com.xyz.yupao.model.dto.TeamQuery;
 import com.xyz.yupao.model.request.TeamAddRequest;
 import com.xyz.yupao.model.request.TeamJoinRequest;
+import com.xyz.yupao.model.request.TeamQuitRequest;
 import com.xyz.yupao.model.request.TeamUpdateRequest;
 import com.xyz.yupao.model.vo.TeamUserVO;
 
@@ -48,4 +49,12 @@ public interface TeamService extends IService<Team> {
      * @return
      */
     boolean joinTeam(TeamJoinRequest teamJoinRequest, User loginUser);
+
+    /**
+     * 退出队伍
+     * @param teamQuitRequest
+     * @param loginUser
+     * @return
+     */
+    boolean quitTeam(TeamQuitRequest teamQuitRequest, User loginUser);
 }
