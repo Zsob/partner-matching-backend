@@ -8,6 +8,7 @@ import com.xyz.yupao.common.ResultUtils;
 import com.xyz.yupao.exception.BusinessException;
 import com.xyz.yupao.model.domain.Team;
 import com.xyz.yupao.model.domain.User;
+import com.xyz.yupao.model.domain.UserTeam;
 import com.xyz.yupao.model.dto.TeamQuery;
 import com.xyz.yupao.model.request.TeamAddRequest;
 import com.xyz.yupao.model.request.TeamJoinRequest;
@@ -16,12 +17,16 @@ import com.xyz.yupao.model.request.TeamUpdateRequest;
 import com.xyz.yupao.model.vo.TeamUserVO;
 import com.xyz.yupao.service.TeamService;
 import com.xyz.yupao.service.UserService;
+import com.xyz.yupao.service.UserTeamService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/team")
@@ -31,6 +36,8 @@ public class TeamController {
     private UserService userService;
     @Resource
     private TeamService teamService;
+    @Resource
+    private UserTeamService userTeamService;
 
     /**
      * 添加队伍接口
@@ -100,8 +107,8 @@ public class TeamController {
      * @param id
      * @return
      */
-    @PostMapping("/get")
-    public BaseResponse<Team> getTeamById(@RequestBody long id) {
+    @GetMapping("/get")
+    public BaseResponse<Team> getTeamById(long id) {
         if (id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -181,5 +188,46 @@ public class TeamController {
         // 调用业务层执行退出队伍操作
         boolean result = teamService.quitTeam(teamQuitRequest, loginUser);
         return ResultUtils.success(result);
+    }
+
+    /**
+     * 获取我创建的队伍
+     * @param teamQuery
+     * @param request
+     * @return
+     */
+    @GetMapping("/list/my/create")
+    public BaseResponse<List<TeamUserVO>> listMyCreateTeams(TeamQuery teamQuery,HttpServletRequest request){
+        if (teamQuery==null){
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        teamQuery.setUserId(loginUser.getId());
+        List<TeamUserVO> teamList = teamService.listTeams(teamQuery, true);
+        return ResultUtils.success(teamList);
+    }
+
+    /**
+     * 获取我创建的队伍
+     * @param teamQuery
+     * @param request
+     * @return
+     */
+    @GetMapping("/list/my/join")
+    public BaseResponse<List<TeamUserVO>> listMyJoinTeams(TeamQuery teamQuery,HttpServletRequest request){
+        if (teamQuery==null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        QueryWrapper<UserTeam> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("userId",loginUser.getId());
+        List<UserTeam> userTeamList = userTeamService.list(queryWrapper);
+        // 取出不重复的队伍id
+        Map<Long, List<UserTeam>> listMap = userTeamList.stream()
+                .collect(Collectors.groupingBy(UserTeam::getTeamId));
+        ArrayList<Long> idList = new ArrayList<>(listMap.keySet());
+        teamQuery.setIdList(idList);
+        List<TeamUserVO> teamList = teamService.listTeams(teamQuery, true);
+        return ResultUtils.success(teamList);
     }
 }
