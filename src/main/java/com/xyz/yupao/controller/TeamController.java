@@ -3,6 +3,7 @@ package com.xyz.yupao.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.xyz.yupao.common.BaseResponse;
+import com.xyz.yupao.common.DeleteRequest;
 import com.xyz.yupao.common.ErrorCode;
 import com.xyz.yupao.common.ResultUtils;
 import com.xyz.yupao.exception.BusinessException;
@@ -63,14 +64,15 @@ public class TeamController {
     /**
      * 解散队伍接口
      *
-     * @param id
+     * @param deleteRequest
      * @return
      */
     @PostMapping("/delete")
-    public BaseResponse<Boolean> deleteTeam(@RequestBody long id,HttpServletRequest request) {
-        if (id <= 0) {
+    public BaseResponse<Boolean> deleteTeam(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
+        if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        long id = deleteRequest.getId();
         // 获取当前用户信息
         User loginUser = userService.getLoginUser(request);
         // 执行删除/解散操作
