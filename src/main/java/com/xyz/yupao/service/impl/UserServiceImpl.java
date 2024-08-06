@@ -10,6 +10,8 @@ import com.xyz.yupao.exception.BusinessException;
 import com.xyz.yupao.model.domain.User;
 import com.xyz.yupao.service.UserService;
 import com.xyz.yupao.mapper.UserMapper;
+import com.xyz.yupao.utils.AlgorithmUtils;
+import javafx.util.Pair;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -20,10 +22,7 @@ import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,7 +48,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Resource
     private UserMapper userMapper;
     @Resource
-    private RedisTemplate<String,Object> redisTemplate;
+    private RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public long userRegister(String userAccount, String userPassword, String checkPassword, String planetCode) {
@@ -201,14 +200,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new BusinessException(ErrorCode.NULL_ERROR);
         }
         Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
-        User currentUser=(User) userObj;
-        if (currentUser==null){
+        User currentUser = (User) userObj;
+        if (currentUser == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN);
         }
         Long id = currentUser.getId();
         User newCurrentUser = this.getById(id);
-        if (newCurrentUser==null){
-            throw new BusinessException(ErrorCode.NULL_ERROR,"无法获取当前用户信息");
+        if (newCurrentUser == null) {
+            throw new BusinessException(ErrorCode.NULL_ERROR, "无法获取当前用户信息");
         }
         return this.getSafetyUser(newCurrentUser);
     }
@@ -220,11 +219,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         // 校验权限
-        if (!isAdmin(loginUser) && userId!=loginUser.getId()){
+        if (!isAdmin(loginUser) && userId != loginUser.getId()) {
             throw new BusinessException(ErrorCode.NO_AUTH);
         }
         User oldUser = this.getById(userId);
-        if (oldUser==null){
+        if (oldUser == null) {
             throw new BusinessException(ErrorCode.NULL_ERROR);
         }
         // 触发更新
@@ -233,12 +232,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Override
     public Page<User> getRecommendUsers(long pageNum, long pageSize, HttpServletRequest request) {
-        String redisKey= null;
+        String redisKey = null;
         try {
             // 获取当前登录用户
             User loginUser = this.getLoginUser(request);
             // 格式化Redis的key，以用户ID作为唯一标识
-            redisKey = String.format("yupao:user:recommend:%s",loginUser.getId());
+            redisKey = String.format("yupao:user:recommend:%s", loginUser.getId());
         } catch (Exception e) {
             // 当前用户未登录
             redisKey = "yupao:user:recommend:0";
@@ -246,7 +245,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 尝试从Redis中获取缓存的用户分页数据
         ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
         Page<User> userPage = (Page<User>) valueOperations.get(redisKey);
-        if (userPage!=null) {
+        if (userPage != null) {
             // 如果存在，则直接返回
             return userPage;
         }
@@ -254,12 +253,63 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         userPage = this.page(new Page<>(pageNum, pageSize), null);
         // 将数据库中查到的信息放入Redis，并设置过期时间
         try {
-            valueOperations.set(redisKey,userPage,180, TimeUnit.MINUTES);
+            valueOperations.set(redisKey, userPage, 180, TimeUnit.MINUTES);
         } catch (Exception e) {
-            log.error("redis set key error",e);
+            log.error("redis set key error", e);
         }
         // 返回得到的用户列表
         return userPage;
+    }
+
+    @Override
+    public List<User> matchUsers(long num, User loginUser) {
+        // 初始化查询条件，确保用户的标签不为空
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.isNotNull("tags");
+        // 仅选择 id 和 tags 字段进行查询，减少查询数据量，提升性能
+        queryWrapper.select("id", "tags");
+        // 获取数据库中所有带标签的用户列表
+        List<User> userList = this.list(queryWrapper);
+        // 将当前用户的标签从Json字符串替换为List
+        String tags = loginUser.getTags();
+        Gson gson = new Gson();
+        List<String> tagList = gson.fromJson(tags, new TypeToken<List<String>>() {
+        }.getType());
+        // 准备用于存储用户与距离信息的列表
+        ArrayList<Pair<User, Long>> list = new ArrayList<>();
+        for (User user : userList) {
+            String userTags = user.getTags();
+            // 排除空标签以及当前用户自己
+            if (StringUtils.isBlank(userTags) || userTags.equals("[]") || user.getId()==loginUser.getId()){
+                continue;
+            }
+            List<String> userTagList = gson.fromJson(userTags, new TypeToken<List<String>>() {
+            }.getType());
+            // 计算标签列表之间的编辑距离
+            long distance = AlgorithmUtils.minDistance(tagList, userTagList);
+            list.add(new Pair<>(user,distance));
+        }
+        // 按编辑距离进行排序并获取距离最小的前num个用户
+        List<Pair<User, Long>> topUserPairList = list.stream()
+                .sorted(Comparator.comparingLong(Pair::getValue)) // 根据配对中的值(距离)进行排序
+                .limit(num) // 取距离最小的前num个用户
+                .collect(Collectors.toList());
+        // 原本顺序的 userId 列表
+        List<Long> userIdList = topUserPairList.stream()
+                                        .map(pair -> pair.getKey().getId())
+                                        .collect(Collectors.toList());
+        QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
+        userQueryWrapper.in("id", userIdList);
+        // 组装最终的用户列表
+        Map<Long, List<User>> userIdUserListMap = this.list(userQueryWrapper)
+                .stream()
+                .map(user -> getSafetyUser(user))
+                .collect(Collectors.groupingBy(User::getId));
+        List<User> finalUserList = new ArrayList<>();
+        for (Long userId : userIdList) {
+            finalUserList.add(userIdUserListMap.get(userId).get(0));
+        }
+        return finalUserList;
     }
 
 
