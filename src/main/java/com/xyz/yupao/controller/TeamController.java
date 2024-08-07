@@ -134,8 +134,37 @@ public class TeamController {
         }
         // 判断是否为管理员
         boolean isAdmin = userService.isAdmin(request);
-        // 执行查询操作
+        // 查询符合条件的队伍列表
         List<TeamUserVO> teamList = teamService.listTeams(teamQuery, isAdmin);
+        // 从返回的队伍列表中提取队伍ID
+        final  List<Long> teamIdList=teamList.stream().map(TeamUserVO::getId).collect(Collectors.toList());
+        // 查询当前登录用户已加入的队伍
+        QueryWrapper<UserTeam> userTeamQueryWrapper = new QueryWrapper<>();
+        try {
+            User loginUser = userService.getLoginUser(request);
+            userTeamQueryWrapper.eq("userId",loginUser.getId());
+            userTeamQueryWrapper.in("teamId",teamIdList);
+            List<UserTeam> userTeamList = userTeamService.list(userTeamQueryWrapper);
+            // 获取已加入队伍的ID集合
+            List<Long> hasJoinTeamIdSet = userTeamList.stream().map(UserTeam::getTeamId).collect(Collectors.toList());
+            // 标注每个队伍对象用户是否加入(hasJoin)
+            teamList.forEach(team->{
+                boolean hasJoin=hasJoinTeamIdSet.contains(team.getId());
+                team.setHasJoin(hasJoin);
+            });
+        } catch (Exception e) {}
+        // 根据队伍ID，查询所有相关联的UserTeam记录，用于计算每个队伍的成员数量
+        QueryWrapper<UserTeam> userTeamJoinQueryWrapper = new QueryWrapper<>();
+        userTeamJoinQueryWrapper.in("teamId",teamIdList);
+        List<UserTeam> userTeamJoinList = userTeamService.list(userTeamQueryWrapper);
+        // 将队伍成员按队伍ID分组，便于计算每个队伍的成员数量
+        Map<Long, List<UserTeam>> teamIdUserTeamMap = userTeamJoinList.stream()
+                            .collect(Collectors.groupingBy(UserTeam::getTeamId));
+        teamList.forEach(team->{
+            // 设置每个队伍的成员数量
+            team.setHasJoinNum(teamIdUserTeamMap.getOrDefault(team.getId(),new ArrayList<>()).size());
+        });
+        // 返回处理后的队伍列表
         return ResultUtils.success(teamList);
     }
 
