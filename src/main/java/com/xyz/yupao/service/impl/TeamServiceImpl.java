@@ -21,6 +21,8 @@ import com.xyz.yupao.service.UserService;
 import com.xyz.yupao.service.UserTeamService;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author 74703
@@ -43,6 +46,8 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
     private UserService userService;
     @Resource
     private UserTeamService userTeamService;
+    @Resource
+    private RedissonClient redissonClient;
 
     @Override
     public long addTeam(Team team, User loginUser) {
@@ -266,31 +271,52 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         }
         // 检查用户是否超过队伍数量限制(5个)
         long userId = loginUser.getId();
-        QueryWrapper<UserTeam> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("userId", userId);
-        long hasJoinTeam = userTeamService.count(queryWrapper);
-        if (hasJoinTeam >= 5) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "最多创建和加入5个队伍");
+        // 使用Redisson的分布式锁，确保同时只有一个线程可以执行加入队伍的操作
+        RLock lock = redissonClient.getLock("yupao:join_team");
+        try {
+            while (true) {
+                if (lock.tryLock(0,-1, TimeUnit.MILLISECONDS)) {
+                    // 输出当前获取锁的线程ID，用于调试和监控
+                    System.out.println("getLock: " + Thread.currentThread().getId());
+                    QueryWrapper<UserTeam> queryWrapper = new QueryWrapper<>();
+                    queryWrapper.eq("userId", userId);
+                    long hasJoinTeam = userTeamService.count(queryWrapper);
+                    if (hasJoinTeam >= 5) {
+                        throw new BusinessException(ErrorCode.PARAMS_ERROR, "最多创建和加入5个队伍");
+                    }
+                    // 检查是否重复加入
+                    queryWrapper = new QueryWrapper<>();
+                    queryWrapper.eq("userId", userId);
+                    queryWrapper.eq("teamId", teamId);
+                    long hasUserJoinTeam = userTeamService.count(queryWrapper);
+                    if (hasUserJoinTeam > 0) {
+                        throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户已加入该队伍");
+                    }
+                    // 检查队伍是否满员
+                    long teamHasJoinNum = countTeamUserByTeamId(teamId);
+                    if (teamHasJoinNum >= team.getMaxNum()) {
+                        throw new BusinessException(ErrorCode.PARAMS_ERROR, "队伍已满");
+                    }
+                    // 执行加入操作
+                    UserTeam userTeam = new UserTeam();
+                    userTeam.setUserId(userId);
+                    userTeam.setTeamId(teamId);
+                    userTeam.setJoinTime(new Date());
+                    return userTeamService.save(userTeam);
+                }
+            }
+        }  catch (InterruptedException e) {
+            // 锁获取过程中的中断异常处理
+            log.error("doCacheRecommendUser error", e);
+            return false;
+        } finally {
+            // 最终块确保只有持有锁的线程能够释放锁
+            if (lock.isHeldByCurrentThread()) {
+                // 输出当前释放锁的线程ID，用于调试和监控
+                System.out.println("unlock: " + Thread.currentThread().getId());
+                lock.unlock();
+            }
         }
-        // 检查是否重复加入
-        queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("userId", userId);
-        queryWrapper.eq("teamId", teamId);
-        long hasUserJoinTeam = userTeamService.count(queryWrapper);
-        if (hasUserJoinTeam > 0) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户已加入该队伍");
-        }
-        // 检查队伍是否满员
-        long teamHasJoinNum = countTeamUserByTeamId(teamId);
-        if (teamHasJoinNum >= team.getMaxNum()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "队伍已满");
-        }
-        // 执行加入操作
-        UserTeam userTeam = new UserTeam();
-        userTeam.setUserId(userId);
-        userTeam.setTeamId(teamId);
-        userTeam.setJoinTime(new Date());
-        return userTeamService.save(userTeam);
     }
 
     private long countTeamUserByTeamId(Long teamId) {
@@ -373,37 +399,38 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         Team team = getTeamById(id);
         long teamId = team.getId();
         // 验证当前登录用户是否为队长
-        if (team.getUserId()!=loginUser.getId()){
-            throw new BusinessException(ErrorCode.NO_AUTH,"无访问权限");
+        if (team.getUserId() != loginUser.getId()) {
+            throw new BusinessException(ErrorCode.NO_AUTH, "无访问权限");
         }
         // 移除所有与队伍相关联的用户信息
         QueryWrapper<UserTeam> userTeamQueryWrapper = new QueryWrapper<>();
-        userTeamQueryWrapper.eq("teamId",teamId);
+        userTeamQueryWrapper.eq("teamId", teamId);
         boolean result = userTeamService.remove(userTeamQueryWrapper);
-        if (!result){
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR,"删除队伍关联信息失败");
+        if (!result) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除队伍关联信息失败");
         }
         // 删除队伍本身
         result = this.removeById(teamId);
-        if (!result){
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR,"解散队伍失败");
+        if (!result) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "解散队伍失败");
         }
         return true;
     }
 
     /**
      * 根据队伍ID返回队伍信息
+     *
      * @param teamId
      * @return
      */
-    private Team getTeamById(Long teamId){
+    private Team getTeamById(Long teamId) {
         // 校验队伍ID的有效性
-        if(teamId == null || teamId <= 0){
+        if (teamId == null || teamId <= 0) {
             throw new BusinessException(ErrorCode.NULL_ERROR, "无效的队伍ID");
         }
         // 获取队伍信息，确认队伍存在
         Team team = this.getById(teamId);
-        if(team == null){
+        if (team == null) {
             throw new BusinessException(ErrorCode.NULL_ERROR, "队伍不存在");
         }
         return team;

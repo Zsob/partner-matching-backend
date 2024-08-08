@@ -153,18 +153,13 @@ public class TeamController {
                 team.setHasJoin(hasJoin);
             });
         } catch (Exception e) {}
-        // 根据队伍ID，查询所有相关联的UserTeam记录，用于计算每个队伍的成员数量
+        // 3、查询已加入队伍的人数
         QueryWrapper<UserTeam> userTeamJoinQueryWrapper = new QueryWrapper<>();
-        userTeamJoinQueryWrapper.in("teamId",teamIdList);
-        List<UserTeam> userTeamJoinList = userTeamService.list(userTeamQueryWrapper);
-        // 将队伍成员按队伍ID分组，便于计算每个队伍的成员数量
-        Map<Long, List<UserTeam>> teamIdUserTeamMap = userTeamJoinList.stream()
-                            .collect(Collectors.groupingBy(UserTeam::getTeamId));
-        teamList.forEach(team->{
-            // 设置每个队伍的成员数量
-            team.setHasJoinNum(teamIdUserTeamMap.getOrDefault(team.getId(),new ArrayList<>()).size());
-        });
-        // 返回处理后的队伍列表
+        userTeamJoinQueryWrapper.in("teamId", teamIdList);
+        List<UserTeam> userTeamList = userTeamService.list(userTeamJoinQueryWrapper);
+        // 队伍 id => 加入这个队伍的用户列表
+        Map<Long, List<UserTeam>> teamIdUserTeamList = userTeamList.stream().collect(Collectors.groupingBy(UserTeam::getTeamId));
+        teamList.forEach(team -> team.setHasJoinNum(teamIdUserTeamList.getOrDefault(team.getId(), new ArrayList<>()).size()));
         return ResultUtils.success(teamList);
     }
 
