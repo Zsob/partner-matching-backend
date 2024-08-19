@@ -16,8 +16,6 @@ import java.util.concurrent.*;
 
 @SpringBootTest
 public class InsertUserTest {
-
-
     static List<String> AvatarList = Arrays.asList(
             "https://pic1.zhimg.com/80/v2-ec3cb33d627617314932405c49b00754_720w.jpg",
             "https://pic1.zhimg.com/v2-ec3cb33d627617314932405c49b00754_b.jpg",
@@ -144,8 +142,8 @@ public class InsertUserTest {
 
     /**
      * 执行用户数据的循环插入操作。
-     * 创建了5000个用户实例，并逐一插入数据库中。
-     * 批量插入执行时间（毫秒）：64928
+     * 创建了?个用户实例，并逐一插入数据库中。
+     * 批量插入执行时间（毫秒）：5000条-64928  10000条-142429
      */
     @Test
     public void doInsertUser() {
@@ -154,7 +152,7 @@ public class InsertUserTest {
         int randomNumber;
         StopWatch stopWatch = new StopWatch();
         stopWatch.start(); // 开始计时
-        final int INSERT_NUM = 5000; // 定义插入的用户数量
+        final int INSERT_NUM = 10000; // 定义插入的用户数量
         for (int i = 0; i < INSERT_NUM; i++) {
             User user = new User();
             // 配置用户信息
@@ -223,6 +221,7 @@ public class InsertUserTest {
      * 此方法尤其适用于处理大量数据插入操作，能显著提高性能。
      * batchSize=5000：并发批量插入执行时间（毫秒）：2603
      * batchSize=500：并发批量插入执行时间（毫秒）：2381
+     * 100000-9682ms-9.6秒
      */
     // 线程池的设置
     private ExecutorService executorService = new ThreadPoolExecutor(
@@ -239,7 +238,7 @@ public class InsertUserTest {
         Random random = new Random();
         int randomNumber;
         StopWatch stopWatch = new StopWatch();
-        final int INSERT_NUM=70000; // 总插入数据量
+        final int INSERT_NUM=100000; // 总插入数据量
         final int batchSize=1000; // 每批次处理的数据量
         stopWatch.start(); // 开始计时
         List<CompletableFuture<Void>> futureList=new ArrayList<>();

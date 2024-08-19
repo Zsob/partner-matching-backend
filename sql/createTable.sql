@@ -3,10 +3,11 @@ create table user
 (
     id           bigint auto_increment comment 'id'
         primary key,
-    userName     varchar(256)                       null comment '昵称',
+    username     varchar(256)                       null comment '昵称',
     userAccount  varchar(256)                       null comment '账号',
     avatarUrl    varchar(1024)                      null comment '头像',
     gender       tinyint                            null comment '性别',
+    profile      varchar(512)                       null comment '个人简介',
     userPassword varchar(512)                       null comment '密码',
     phone        varchar(128)                       null comment '电话',
     email        varchar(512)                       null comment '邮箱',
